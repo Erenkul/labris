@@ -8,6 +8,8 @@ from functools import wraps
 
 from datetime import datetime
 
+from flask_sqlalchemy import SQLAlchemy
+
 #mail için regex ile expression düzeltme
 import re
 import os
@@ -15,9 +17,30 @@ import hashlib
 
 app = Flask(__name__)
 app.secret_key = "gelistirme-icin-gizli-anahtar-123"
+app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://flask_user:flask_pass@localhost:5432/flask_app_db" #hangi veritabanına bağlanacağız 
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False #sql alchemy ile flask uygulaması arasında bir bağlantı kuruyoruz ve veritabanı değişikliklerini takip etmeye gerek olmadığını belirtiyoruz
 
-users=[]
-online_users=[]
+db = SQLAlchemy(app) #flask ile sql alchemy arasında bir bağlantı kuruyoruz ve db değişkeni ile veritabanı işlemlerini yapabileceğiz
+
+
+
+#users=[]
+#online_users=[]
+class User(db.Model):
+    __tablename__ ="users"
+    id=db.Column(db.Integer,primary_key=True)
+    username= db.Column(db.String(50),unique=True,nullable=False)
+    email= db.Column(db.String(100),unique=True,nullable=False)
+    password_hash= db.Column(db.String(128),nullable=False)
+    password_salt= db.Column(db.String(32),nullable=False)
+
+class OnlineUser(db.Model):
+    __tablename__="online_users"
+    id=db.Column(db.Integer,primary_key=True)
+    username=db.Column(db.String(50),nullable=False)
+    ipaddress=db.Column(db.String(45),nullable=False)
+    login_time=db.Column(db.DateTime,default=datetime.now)
+
 
 @app.route("/")
 def home():
@@ -49,18 +72,19 @@ def user_create():
     salt = generate_salt()
     password_hash = hash_password(data.get("password"), salt)
 
-    new_user = {
-        "id": len(users) + 1,
-        "username": data.get("username"),
-        "email": data.get("email"),
-        "password_hash": password_hash,
-        "password_salt": salt
-    }
-    users.append(new_user)
+    new_user = User(
+        username=data.get("username"),
+        email=data.get("email"),
+        password_hash=password_hash,
+        password_salt=salt
+    )
+    db.session.add(new_user)
+    db.session.commit()
+#users.append(new_user)
     return jsonify({"message": "Kullanici olusturuldu  !", "user": {
-        "id": new_user["id"],
-        "username": new_user["username"],
-        "email": new_user["email"]
+        "id": new_user.id,
+        "username": new_user.username,
+        "email": new_user.email
     }}), 201
 #(venv) PS C:\Users\Eren\intern-projeler\6-flask-uygulamasi> curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"test5\", \"email\": \"test5@example.com\", \"password\": \"Passw0rd1\"}'
 {
@@ -83,27 +107,37 @@ def login():
         return jsonify({"error": "username ve password zorunlu"}), 400
 
     user_found=None
-    for user in users:
-        if user["username"]==username:
-            user_found=user
-            break
+    #for user in users:
+    #    if user["username"]==username:
+    #        user_found=user
+    #        break
+    user_found = User.query.filter_by(username=username).first()
+
     if not user_found:
         return jsonify({"error": "Kullanici bulunamadi"}), 404
 
-    hash_check=hash_password(password,user_found["password_salt"])
-    if hash_check!=user_found["password_hash"]:
+    hash_check=hash_password(password,user_found.password_salt)
+    if hash_check!=user_found.password_hash:
         return jsonify({"error": "Hatali sifre"}), 401
 
     session["username"]=username
-    online_users.append({
-        "username": username,
-        "ipaddress": request.remote_addr,
-        "login_time": datetime.now().isoformat()
-    })
-    return jsonify({"message": "Giris basarili", "username": username})
+
+    #online_users.append({
+    #    "username": username,
+    #    "ipaddress": request.remote_addr,
+    #    "login_time": datetime.now().isoformat()
+    #})
+    #return jsonify({"message": "Giris basarili", "username": username})
 
 # ilk olarak: curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"test5\", \"email\": \"test5@example.com\", \"password\": \"Passw0rd1\"}'
 # ikinci olarak: curl.exe -c cookies.txt -X POST http://127.0.0.1:5000/login -H "Content-Type: application/json" -d '{\"username\": \"test5\", \"password\": \"Passw0rd1\"}'
+    new_online_user = OnlineUser(
+        username=username,
+        ipaddress=request.remote_addr,
+    )
+    db.session.add(new_online_user)
+    db.session.commit()
+    return jsonify({"message": "Giris basarili", "username": username}), 200
 
 
 def login_required(view_func):
@@ -113,7 +147,8 @@ def login_required(view_func):
         if not username:
             return jsonify({"error": "Once giris yapmalisiniz"}), 401
 
-        is_online = any(user["username"] == username for user in online_users)
+        #is_online = any(user["username"] == username for user in online_users)
+        is_online = OnlineUser.query.filter_by(username=username).first() is not None
         if not is_online:
             session.clear()
             return jsonify({"error": "Oturum sona ermis, tekrar giris yapin"}), 401
@@ -128,8 +163,11 @@ def logout():
 
     username=session["username"]
 
-    global online_users
-    online_users = [user for user in online_users if user["username"] != username]
+    #global online_users
+    #online_users = [user for user in online_users if user["username"] != username]
+
+    OnlineUser.query.filter_by(username=username).delete()
+    db.session.commit()
 
     session.clear()
     return jsonify({"message": "Cikis yapildi", "username": username}),200
@@ -140,21 +178,40 @@ def logout():
 @app.route("/onlineusers", methods=["GET"])
 @login_required
 def online_users_route():
-    return jsonify({"online_users": online_users})
+    all_online_users = OnlineUser.query.all()
+    result = [
+        {
+            "username": user.username,
+            "ipaddress": user.ipaddress,
+            "login_time": user.login_time.isoformat()
+        }
+        for user in all_online_users
+    ]
+    return jsonify({"online_users": result})
 #curl.exe http://127.0.0.1:5000/onlineusers
 #curl.exe -b cookies.txt http://127.0.0.1:5000/onlineusers
 
 
 @app.route("/users/list", methods=["GET"])
 #password_hash ve password_salt bilgilerini döndürmemek için safe_users listesi oluşturuyoruz
+#def user_list():
+#    safe_users = [
+#        {"id": user["id"], "username": user["username"], "email": user["email"]}
+#        for user in users
+#    ]
+#    return jsonify({"users": safe_users})
+#curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"eren\", \"email\": \"eren@example.com\"}'
 def user_list():
+    all_users = User.query.all()
     safe_users = [
-        {"id": user["id"], "username": user["username"], "email": user["email"]}
-        for user in users
+        {"id": user.id, "username": user.username, "email": user.email}
+        for user in all_users
     ]
     return jsonify({"users": safe_users})
 
-#curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"eren\", \"email\": \"eren@example.com\"}'
+
+
+
 
 @app.route("/TEST")
 def test():
@@ -180,16 +237,19 @@ def hash_password(password, salt):
 @app.route("/users/delete/<int:user_id>", methods=["DELETE"])
 @login_required #giriş yapmış kullanıcılar sadece silme işlemi yapabilir
 def delete_user(user_id):
-    global users
-    user_found=None
-    for user in users: #önce silinecek kullanıcı gerçekten var mı diye kontrol ediyoruz
-        if user["id"]==user_id:
-            user_found=user
-            break
+    #global users
+    user_found= User.query.filter_by(id=user_id).first()
+    
+    #for user in users: #önce silinecek kullanıcı gerçekten var mı diye kontrol ediyoruz
+    #    if user["id"]==user_id:
+    #        user_found=user
+    #        break
     if not user_found:
             return jsonify({"error": "Kullanici bulunamadi"}), 404
+    db.session.delete(user_found)
+    db.session.commit()
 
-    users=[user for user in users if user["id"] != user_id] 
+    #users=[user for user in users if user["id"] != user_id] 
     #o kullanıcı dışıındaki herkesi tutan yani bir liste oluşturuyoruz. Ve kullanıcı listeden atılmış oluyor
     return jsonify({"message": "Kullanici silindi", "id": user_id}), 200
     #1 kullanıcıyı oluşturma: curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"admin1\", \"email\": \"admin1@example.com\", \"password\": \"Passw0rd1\"}'
@@ -204,11 +264,11 @@ def delete_user(user_id):
 @app.route("/users/update/<int:user_id>", methods=["PUT"])
 @login_required
 def update_user(user_id):
-    user_found = None
-    for user in users:
-        if user["id"] == user_id:
-            user_found = user
-            break
+    user_found = User.query.filter_by(id=user_id).first()
+    #for user in users:
+    #    if user["id"] == user_id:
+    #        user_found = user
+    #        break
 
     if not user_found:
         return jsonify({"error": "Kullanici bulunamadi"}), 404
@@ -228,6 +288,8 @@ def update_user(user_id):
         user_found["password_hash"] = password_hash
         user_found["password_salt"] = salt
 
+    db.session.commit()
+
     return jsonify({"message": "Kullanici guncellendi", "user": {
         "id": user_found["id"],
         "username": user_found["username"],
@@ -239,6 +301,9 @@ def update_user(user_id):
 #curl.exe -b cookies.txt http://127.0.0.1:5000/users/list
 
 if __name__ == "__main__":
+    with app.app_context():#flask a uygulamanın ayarlarına erişmesini sağlamak için app.app_context() kullanıyoruz. Bu, veritabanı işlemlerini gerçekleştirmek için gerekli olan uygulama bağlamını oluşturur.
+        db.create_all()  # Veritabanı tablolarını oluştur
+        #user ve online_users tablolarını oluşturmak için db.create_all() kullanıyoruz. Bu, SQLAlchemy'nin veritabanı şemasını oluşturmasını sağlar.
     app.run(debug=True)
 
 #curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"test7\", \"email\": \"test7@example.com\", \"password\": \"Passw0rd1\"}'
