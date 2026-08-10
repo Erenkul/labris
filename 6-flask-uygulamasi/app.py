@@ -67,6 +67,15 @@ def user_create():
 
     if not is_valid_password(data.get("password")):
         return jsonify({"error": "Geçersiz şifre formatı"}), 400
+
+
+    if User.query.filter_by(username=data.get("username")).first() is not None:
+        return jsonify({"error": "Bu kullanıcı adı zaten mevcut"}), 409
+
+    if User.query.filter_by(email=data.get("email")).first() is not None:
+        return jsonify({"error": "Bu e-posta zaten mevcut"}), 409
+
+    
 #curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"test1\", \"email\": \"gecersizemail\"}'
 #curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"test2\", \"email\": \"test2@example.com\"}'
     salt = generate_salt()
@@ -244,6 +253,7 @@ def delete_user(user_id):
     #    if user["id"]==user_id:
     #        user_found=user
     #        break
+    
     if not user_found:
             return jsonify({"error": "Kullanici bulunamadi"}), 404
     db.session.delete(user_found)
@@ -251,7 +261,9 @@ def delete_user(user_id):
 
     #users=[user for user in users if user["id"] != user_id] 
     #o kullanıcı dışıındaki herkesi tutan yani bir liste oluşturuyoruz. Ve kullanıcı listeden atılmış oluyor
+
     return jsonify({"message": "Kullanici silindi", "id": user_id}), 200
+
     #1 kullanıcıyı oluşturma: curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"admin1\", \"email\": \"admin1@example.com\", \"password\": \"Passw0rd1\"}'
     #2 silinecek olan ikinci kullanıcıyı oluşturma: curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"silinecek\", \"email\": \"silinecek@example.com\", \"password\": \"Passw0rd1\"}'
     #3 giriş yaptık admin1 olarak: curl.exe -c cookies.txt -X POST http://127.0.0.1:5000/login -H "Content-Type: application/json" -d '{\"username\": \"admin1\", \"password\": \"Passw0rd1\"}'
@@ -278,22 +290,22 @@ def update_user(user_id):
     if data.get("email"):
         if not is_valid_email(data.get("email")):
             return jsonify({"error": "Geçersiz e-posta formatı"}), 400
-        user_found["email"] = data.get("email")
+        user_found.email = data.get("email")
 
     if data.get("password"):
         if not is_valid_password(data.get("password")):
             return jsonify({"error": "Geçersiz şifre formatı"}), 400
         salt = generate_salt()
         password_hash = hash_password(data.get("password"), salt)
-        user_found["password_hash"] = password_hash
-        user_found["password_salt"] = salt
+        user_found.password_hash = password_hash
+        user_found.password_salt = salt
 
     db.session.commit()
 
     return jsonify({"message": "Kullanici guncellendi", "user": {
-        "id": user_found["id"],
-        "username": user_found["username"],
-        "email": user_found["email"]
+        "id": user_found.id,
+        "username": user_found.username,
+        "email": user_found.email
     }}), 200
 
 #curl.exe -c cookies.txt -X POST http://127.0.0.1:5000/login -H "Content-Type: application/json" -d '{\"username\": \"admin1\", \"password\": \"Passw0rd1\"}'
