@@ -113,7 +113,7 @@ def login_required(view_func):
         if not username:
             return jsonify({"error": "Once giris yapmalisiniz"}), 401
 
-        is_online = any(u["username"] == username for u in online_users)
+        is_online = any(user["username"] == username for user in online_users)
         if not is_online:
             session.clear()
             return jsonify({"error": "Oturum sona ermis, tekrar giris yapin"}), 401
@@ -146,8 +146,13 @@ def online_users_route():
 
 
 @app.route("/users/list", methods=["GET"])
+#password_hash ve password_salt bilgilerini döndürmemek için safe_users listesi oluşturuyoruz
 def user_list():
-    return jsonify({"users": users})
+    safe_users = [
+        {"id": user["id"], "username": user["username"], "email": user["email"]}
+        for user in users
+    ]
+    return jsonify({"users": safe_users})
 
 #curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"eren\", \"email\": \"eren@example.com\"}'
 
@@ -171,6 +176,67 @@ def generate_salt():
 def hash_password(password, salt):
     return hashlib.sha256((password + salt).encode("utf-8")).hexdigest()
 
+
+@app.route("/users/delete/<int:user_id>", methods=["DELETE"])
+@login_required #giriş yapmış kullanıcılar sadece silme işlemi yapabilir
+def delete_user(user_id):
+    global users
+    user_found=None
+    for user in users: #önce silinecek kullanıcı gerçekten var mı diye kontrol ediyoruz
+        if user["id"]==user_id:
+            user_found=user
+            break
+    if not user_found:
+            return jsonify({"error": "Kullanici bulunamadi"}), 404
+
+    users=[user for user in users if user["id"] != user_id] 
+    #o kullanıcı dışıındaki herkesi tutan yani bir liste oluşturuyoruz. Ve kullanıcı listeden atılmış oluyor
+    return jsonify({"message": "Kullanici silindi", "id": user_id}), 200
+    #1 kullanıcıyı oluşturma: curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"admin1\", \"email\": \"admin1@example.com\", \"password\": \"Passw0rd1\"}'
+    #2 silinecek olan ikinci kullanıcıyı oluşturma: curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"silinecek\", \"email\": \"silinecek@example.com\", \"password\": \"Passw0rd1\"}'
+    #3 giriş yaptık admin1 olarak: curl.exe -c cookies.txt -X POST http://127.0.0.1:5000/login -H "Content-Type: application/json" -d '{\"username\": \"admin1\", \"password\": \"Passw0rd1\"}'
+    #4 kullanıcı listesini çektik: curl.exe -b cookies.txt http://127.0.0.1:5000/users/list
+    #5 kullanıcı silme: curl.exe -b cookies.txt -X DELETE http://127.0.0.1:5000/users/delete/2
+    #6 kullanıcı listesini tekrar çektik: curl.exe -b cookies.txt http://127.0.0.1:5000/users/list
+    #7 kullanıcı listesini silme: curl.exe -b cookies.txt -X DELETE http://127.0.0.1:5000/users/delete/999
+
+
+@app.route("/users/update/<int:user_id>", methods=["PUT"])
+@login_required
+def update_user(user_id):
+    user_found = None
+    for user in users:
+        if user["id"] == user_id:
+            user_found = user
+            break
+
+    if not user_found:
+        return jsonify({"error": "Kullanici bulunamadi"}), 404
+
+    data = request.get_json()
+
+    if data.get("email"):
+        if not is_valid_email(data.get("email")):
+            return jsonify({"error": "Geçersiz e-posta formatı"}), 400
+        user_found["email"] = data.get("email")
+
+    if data.get("password"):
+        if not is_valid_password(data.get("password")):
+            return jsonify({"error": "Geçersiz şifre formatı"}), 400
+        salt = generate_salt()
+        password_hash = hash_password(data.get("password"), salt)
+        user_found["password_hash"] = password_hash
+        user_found["password_salt"] = salt
+
+    return jsonify({"message": "Kullanici guncellendi", "user": {
+        "id": user_found["id"],
+        "username": user_found["username"],
+        "email": user_found["email"]
+    }}), 200
+
+#curl.exe -c cookies.txt -X POST http://127.0.0.1:5000/login -H "Content-Type: application/json" -d '{\"username\": \"admin1\", \"password\": \"Passw0rd1\"}'
+#curl.exe -b cookies.txt -X PUT http://127.0.0.1:5000/users/update/1 -H "Content-Type: application/json" -d '{\"email\": \"admin1-yeni@example.com\"}'
+#curl.exe -b cookies.txt http://127.0.0.1:5000/users/list
 
 if __name__ == "__main__":
     app.run(debug=True)
