@@ -14,6 +14,7 @@ from flask_sqlalchemy import SQLAlchemy
 import re
 import os
 import hashlib
+import logging
 
 app = Flask(__name__)
 app.secret_key = "gelistirme-icin-gizli-anahtar-123"
@@ -22,6 +23,19 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False #sql alchemy ile flask uygu
 
 db = SQLAlchemy(app) #flask ile sql alchemy arasında bir bağlantı kuruyoruz ve db değişkeni ile veritabanı işlemlerini yapabileceğiz
 
+#logging.basicConfig(
+#    filename='activity.log',
+#    level=logging.INFO,
+#    format='%(asctime)s - %(levelname)s - %(message)s'
+#)
+activity_logger = logging.getLogger("activity")
+activity_logger.setLevel(logging.INFO)
+
+file_handler = logging.FileHandler("activity.log")
+file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+
+activity_logger.addHandler(file_handler)
+activity_logger.propagate = False#en kritik satır: "bu logger'ın mesajları root logger'a sızmasın"
 
 
 #users=[]
@@ -87,8 +101,11 @@ def user_create():
         password_hash=password_hash,
         password_salt=salt
     )
+
     db.session.add(new_user)
     db.session.commit()
+    activity_logger.info(f"Yeni Kullanici olusturuldu: {new_user.username} id=({new_user.id})")
+
 #users.append(new_user)
     return jsonify({"message": "Kullanici olusturuldu  !", "user": {
         "id": new_user.id,
@@ -123,10 +140,12 @@ def login():
     user_found = User.query.filter_by(username=username).first()
 
     if not user_found:
+        activity_logger.warning(f"Giris basarisiz: {username} kullanici bulunamadi")
         return jsonify({"error": "Kullanici bulunamadi"}), 404
 
     hash_check=hash_password(password,user_found.password_salt)
     if hash_check!=user_found.password_hash:
+        activity_logger.warning(f"Giris basarisiz: {username} hatali sifre")
         return jsonify({"error": "Hatali sifre"}), 401
 
     session["username"]=username
@@ -146,6 +165,7 @@ def login():
     )
     db.session.add(new_online_user)
     db.session.commit()
+    activity_logger.info(f"Giris basarili: {username} ip: {request.remote_addr}")
     return jsonify({"message": "Giris basarili", "username": username}), 200
 
 
@@ -177,6 +197,7 @@ def logout():
 
     OnlineUser.query.filter_by(username=username).delete()
     db.session.commit()
+    activity_logger.info(f"Cikis yapildi: {username}")
 
     session.clear()
     return jsonify({"message": "Cikis yapildi", "username": username}),200
@@ -253,11 +274,12 @@ def delete_user(user_id):
     #    if user["id"]==user_id:
     #        user_found=user
     #        break
-    
+
     if not user_found:
             return jsonify({"error": "Kullanici bulunamadi"}), 404
     db.session.delete(user_found)
     db.session.commit()
+    activity_logger.info(f"Kullanici silindi: {user_found.username} silen=({session.get('username')})")
 
     #users=[user for user in users if user["id"] != user_id] 
     #o kullanıcı dışıındaki herkesi tutan yani bir liste oluşturuyoruz. Ve kullanıcı listeden atılmış oluyor
@@ -302,6 +324,7 @@ def update_user(user_id):
 
     db.session.commit()
 
+    activity_logger.info(f"Kullanici guncellendi:[{user_found.id}] guncelleyen=({session.get('username')})")
     return jsonify({"message": "Kullanici guncellendi", "user": {
         "id": user_found.id,
         "username": user_found.username,
