@@ -1,0 +1,236 @@
+---
+- name: Nginx + ModSecurity kurulumu
+  hosts: local
+  tasks:
+    - name: CentOS repo - mirrorlist satirlarini kapat
+      ansible.builtin.replace:
+        path: "{{ item }}"
+        regexp: '^mirrorlist='
+        replace: '#mirrorlist='
+      with_fileglob:
+        - /etc/yum.repos.d/CentOS-*.repo
+
+    - name: CentOS repo - vault.centos.org adresini ac
+      ansible.builtin.replace:
+        path: "{{ item }}"
+        regexp: '^#baseurl=http://mirror.centos.org'
+        replace: 'baseurl=http://vault.centos.org'
+      with_fileglob:
+        - /etc/yum.repos.d/CentOS-*.repo
+
+    - name: dnf-utils kur
+      ansible.builtin.dnf:
+        name: dnf-utils
+        state: present
+
+    - name: PowerTools deposunu ac
+      ansible.builtin.command: dnf config-manager --set-enabled powertools
+      changed_when: false
+
+    - name: EPEL deposunu kur
+      ansible.builtin.dnf:
+        name: epel-release
+        state: present
+
+    - name: Development Tools grubunu kur
+      ansible.builtin.dnf:
+        name: "@Development Tools"
+        state: present
+
+    - name: Derleme bagimliliklarini kur
+      ansible.builtin.dnf:
+        name:
+          - pcre-devel
+          - pcre2-devel
+          - libxml2-devel
+          - curl-devel
+          - openssl-devel
+          - yajl
+          - yajl-devel
+          - git
+          - wget
+          - nano
+          - gcc-c++
+          - flex
+          - bison
+          - zlib-devel
+          - autoconf
+          - automake
+          - libtool
+          - pkgconfig
+        state: present
+
+    - name: ModSecurity kaynak kodunu indir
+      ansible.builtin.git:
+        repo: https://github.com/SpiderLabs/ModSecurity
+        dest: /opt/ModSecurity
+        version: v3/master
+        depth: 1
+        force: yes
+
+    - name: ModSecurity alt-modullerini indir
+      ansible.builtin.command: git submodule update --init --recursive
+      args:
+        chdir: /opt/ModSecurity
+        creates: /opt/ModSecurity/others/libinjection/src
+
+    - name: ModSecurity build.sh calistir
+      ansible.builtin.command: ./build.sh
+      args:
+        chdir: /opt/ModSecurity
+        creates: /opt/ModSecurity/configure
+
+    - name: ModSecurity configure calistir
+      ansible.builtin.command: ./configure
+      args:
+        chdir: /opt/ModSecurity
+        creates: /opt/ModSecurity/Makefile
+
+    - name: ModSecurity derle (make)
+      ansible.builtin.command: make -j2
+      args:
+        chdir: /opt/ModSecurity
+        creates: /opt/ModSecurity/src/.libs/libmodsecurity.so
+
+    - name: ModSecurity sisteme kur (make install)
+      ansible.builtin.command: make install
+      args:
+        chdir: /opt/ModSecurity
+        creates: /usr/local/modsecurity/lib/pkgconfig/modsecurity.pc
+
+    - name: ModSecurity-nginx connector indir
+      ansible.builtin.git:
+        repo: https://github.com/owasp-modsecurity/ModSecurity-nginx.git
+        dest: /opt/ModSecurity-nginx
+        depth: 1
+
+    - name: Nginx kaynak kodunu indir
+      ansible.builtin.get_url:
+        url: http://nginx.org/download/nginx-1.26.3.tar.gz
+        dest: /opt/nginx-1.26.3.tar.gz
+
+    - name: Nginx arsivini ac
+      ansible.builtin.unarchive:
+        src: /opt/nginx-1.26.3.tar.gz
+        dest: /opt/
+        remote_src: yes
+        creates: /opt/nginx-1.26.3/configure
+
+    - name: Nginx configure calistir
+      ansible.builtin.command: ./configure --with-compat --with-http_ssl_module --add-dynamic-module=/opt/ModSecurity-nginx
+      args:
+        chdir: /opt/nginx-1.26.3
+        creates: /opt/nginx-1.26.3/objs/Makefile
+
+    - name: Nginx derle (make)
+      ansible.builtin.command: make -j2
+      args:
+        chdir: /opt/nginx-1.26.3
+        creates: /opt/nginx-1.26.3/objs/nginx
+
+    - name: Nginx sisteme kur (make install)
+      ansible.builtin.command: make install
+      args:
+        chdir: /opt/nginx-1.26.3
+        creates: /usr/local/nginx/sbin/nginx
+
+    - name: modsec klasoru olustur
+      ansible.builtin.file:
+        path: /etc/nginx/modsec
+        state: directory
+
+    - name: modsecurity.conf kopyala
+      ansible.builtin.copy:
+        src: /opt/ModSecurity/modsecurity.conf-recommended
+        dest: /etc/nginx/modsec/modsecurity.conf
+        remote_src: yes
+        force: no
+
+    - name: unicode.mapping kopyala
+      ansible.builtin.copy:
+        src: /opt/ModSecurity/unicode.mapping
+        dest: /etc/nginx/modsec/unicode.mapping
+        remote_src: yes
+
+    - name: SecRuleEngine On yap
+      ansible.builtin.replace:
+        path: /etc/nginx/modsec/modsecurity.conf
+        regexp: '^SecRuleEngine DetectionOnly'
+        replace: 'SecRuleEngine On'
+
+    - name: OWASP CRS indir
+      ansible.builtin.git:
+        repo: https://github.com/coreruleset/coreruleset.git
+        dest: /etc/nginx/modsec/crs
+        force: yes
+
+    - name: crs-setup.conf hazirla
+      ansible.builtin.copy:
+        src: /etc/nginx/modsec/crs/crs-setup.conf.example
+        dest: /etc/nginx/modsec/crs/crs-setup.conf
+        remote_src: yes
+        force: no
+
+    - name: main.conf olustur
+      ansible.builtin.copy:
+        dest: /etc/nginx/modsec/main.conf
+        content: |
+          Include /etc/nginx/modsec/modsecurity.conf
+          Include /etc/nginx/modsec/crs/crs-setup.conf
+          Include /etc/nginx/modsec/crs/rules/*.conf
+
+    - name: load_module satirini ekle
+      ansible.builtin.lineinfile:
+        path: /usr/local/nginx/conf/nginx.conf
+        line: "load_module modules/ngx_http_modsecurity_module.so;"
+        regexp: '^load_module modules/ngx_http_modsecurity_module.so;'
+        insertbefore: BOF
+
+    - name: modsecurity on satirini ekle
+      ansible.builtin.lineinfile:
+        path: /usr/local/nginx/conf/nginx.conf
+        regexp: '^\s*modsecurity on;'
+        line: "        modsecurity on;"
+        insertafter: 'listen\s+80;'
+
+    - name: modsecurity_rules_file satirini ekle
+      ansible.builtin.lineinfile:
+        path: /usr/local/nginx/conf/nginx.conf
+        regexp: '^\s*modsecurity_rules_file'
+        line: "        modsecurity_rules_file /etc/nginx/modsec/main.conf;"
+        insertafter: '^\s*modsecurity on;'
+
+    - name: listen 443 satirini ekle
+      ansible.builtin.lineinfile:
+        path: /usr/local/nginx/conf/nginx.conf
+        regexp: '^\s*listen\s+443 ssl;'
+        line: "        listen       443 ssl;"
+        insertafter: '^\s*modsecurity_rules_file'
+
+    - name: ssl_certificate satirini ekle
+      ansible.builtin.lineinfile:
+        path: /usr/local/nginx/conf/nginx.conf
+        regexp: '^\s*ssl_certificate\s+/'
+        line: "        ssl_certificate      /etc/nginx/ssl/server.crt;"
+        insertafter: '^\s*listen\s+443 ssl;'
+
+    - name: ssl_certificate_key satirini ekle
+      ansible.builtin.lineinfile:
+        path: /usr/local/nginx/conf/nginx.conf
+        regexp: '^\s*ssl_certificate_key'
+        line: "        ssl_certificate_key  /etc/nginx/ssl/server.key;"
+        insertafter: '^\s*ssl_certificate\s+/'
+
+    - name: nginx.conf syntax kontrolu
+      ansible.builtin.command: /usr/local/nginx/sbin/nginx -t
+      changed_when: false
+
+    - name: Nginx calisiyor mu kontrol et
+      ansible.builtin.command: pgrep -x nginx
+      register: nginx_calisiyor
+      failed_when: false
+      changed_when: false
+
+    - name: Nginx'i baslat
+      ansible.builtin.command: /usr/local/nginx/sbin/nginx
+      when: nginx_calisiyor.rc != 0
