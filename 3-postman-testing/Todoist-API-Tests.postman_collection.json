@@ -1,0 +1,40 @@
+{
+	"id": "c0ef7e60-773f-4421-8ebc-a5d064baf7f5",
+	"name": "Todoist API",
+	"values": [
+		{
+			"key": "Variable",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "Type",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "Inıtial Value",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "Current Value",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "gorev_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		}
+	],
+	"color": null,
+	"_postman_variable_scope": "environment",
+	"_postman_exported_at": "2026-08-17T06:51:09.794Z",
+	"_postman_exported_using": "Postman/12.23.7"
+}
