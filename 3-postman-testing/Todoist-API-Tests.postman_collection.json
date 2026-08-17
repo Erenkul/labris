@@ -1,40 +1,298 @@
 {
-	"id": "c0ef7e60-773f-4421-8ebc-a5d064baf7f5",
-	"name": "Todoist API",
-	"values": [
-		{
-			"key": "Variable",
-			"value": "",
-			"type": "default",
-			"enabled": true
-		},
-		{
-			"key": "Type",
-			"value": "",
-			"type": "default",
-			"enabled": true
-		},
-		{
-			"key": "Inıtial Value",
-			"value": "",
-			"type": "default",
-			"enabled": true
-		},
-		{
-			"key": "Current Value",
-			"value": "",
-			"type": "default",
-			"enabled": true
-		},
-		{
-			"key": "gorev_id",
-			"value": "",
-			"type": "default",
-			"enabled": true
-		}
-	],
-	"color": null,
-	"_postman_variable_scope": "environment",
-	"_postman_exported_at": "2026-08-17T06:51:09.794Z",
-	"_postman_exported_using": "Postman/12.23.7"
+  "info": {
+    "_postman_id": "82f9f2e8-930c-4190-94d1-806985b36ff4",
+    "name": "Todoist API Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "57409074"
+  },
+  "item": [
+    {
+      "name": "Görev Update",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Gorev basariyla guncellenmeli (200 donmeli)\", function () {\r",
+              "    pm.response.to.have.status(200);\r",
+              "});\r",
+              "\r",
+              "pm.test(\"Icerik gercekten guncellenmis olmali\", function () {\r",
+              "    const jsonData = pm.response.json();\r",
+              "    pm.expect(jsonData.content).to.eql(\"Guncellenmis test gorevi\");\r",
+              "});\r",
+              "\r",
+              "pm.test(\"Oncelik gercekten guncellenmis olmali\", function () {\r",
+              "    const jsonData = pm.response.json();\r",
+              "    pm.expect(jsonData.priority).to.eql(4);\r",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "YOUR_TODOIST_TOKEN_HERE",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"content\": \"Guncellenmis test gorevi\",\r\n  \"priority\": 4\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.todoist.com/api/v1/tasks/{{gorev_id}}",
+          "protocol": "https",
+          "host": [
+            "api",
+            "todoist",
+            "com"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tasks",
+            "{{gorev_id}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Görev Oluştur-Başarılı",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Durum kodu 200 olmali\", function () {\r",
+              "    pm.response.to.have.status(200);\r",
+              "});\r",
+              "\r",
+              "pm.test(\"Cevapta gorev ID'si olmali\", function () {\r",
+              "    const jsonData = pm.response.json();\r",
+              "    pm.expect(jsonData).to.have.property(\"id\");\r",
+              "});\r",
+              "\r",
+              "pm.test(\"Gorev icerigi dogru olmali\", function () {\r",
+              "    const jsonData = pm.response.json();\r",
+              "    pm.expect(jsonData.content).to.eql(\"Test görevi - Postman\");\r",
+              "});\r",
+              "const jsonData = pm.response.json();\r",
+              "pm.environment.set(\"gorev_id\", jsonData.id);"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "YOUR_TODOIST_TOKEN_HERE",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"content\": \"Test görevi - Postman\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.todoist.com/api/v1/tasks",
+          "protocol": "https",
+          "host": [
+            "api",
+            "todoist",
+            "com"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tasks"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Görev Oluştur - Boş İçerik(Negatif)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Bos icerik reddedilmeli (400 donmeli)\", function () {\r",
+              "    pm.response.to.have.status(400);\r",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "YOUR_TODOIST_TOKEN_HERE",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"content\": \"\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.todoist.com/api/v1/tasks",
+          "protocol": "https",
+          "host": [
+            "api",
+            "todoist",
+            "com"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tasks"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Görev Sil",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Gorev basariyla silinmeli (204 donmeli)\", function () {\r",
+              "    pm.response.to.have.status(204);\r",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "YOUR_TODOIST_TOKEN_HERE",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "DELETE",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.todoist.com/api/v1/tasks/{{gorev_id}}",
+          "protocol": "https",
+          "host": [
+            "api",
+            "todoist",
+            "com"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tasks",
+            "{{gorev_id}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Unauthorized Access Test",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Token olmadan erisim reddedilmeli (401 donmeli)\", function () {\r",
+              "    pm.response.to.have.status(401);\r",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.todoist.com/api/v1/tasks",
+          "protocol": "https",
+          "host": [
+            "api",
+            "todoist",
+            "com"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tasks"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
 }
