@@ -339,7 +339,7 @@ if __name__ == "__main__":
     with app.app_context():#flask a uygulamanın ayarlarına erişmesini sağlamak için app.app_context() kullanıyoruz. Bu, veritabanı işlemlerini gerçekleştirmek için gerekli olan uygulama bağlamını oluşturur.
         db.create_all()  # Veritabanı tablolarını oluştur
         #user ve online_users tablolarını oluşturmak için db.create_all() kullanıyoruz. Bu, SQLAlchemy'nin veritabanı şemasını oluşturmasını sağlar.
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
 
 #curl.exe -X POST http://127.0.0.1:5000/users/create -H "Content-Type: application/json" -d '{\"username\": \"test7\", \"email\": \"test7@example.com\", \"password\": \"Passw0rd1\"}'
 #curl.exe -c cookies.txt -X POST http://127.0.0.1:5000/login -H "Content-Type: application/json" -d '{\"username\": \"test7\", \"password\": \"Passw0rd1\"}'
