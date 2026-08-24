@@ -1,0 +1,43 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: django-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: djangodb
+      MYSQL_USER: djangouser
+      MYSQL_PASSWORD: djangopass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  admin-panel:
+    build: .
+    container_name: django-admin-panel
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      - DJANGO_URLCONF=config.urls_admin
+    ports:
+      - "80:8000"
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+
+  user-panel:
+    build: .
+    container_name: django-user-panel
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      - DJANGO_URLCONF=config.urls_user
+    ports:
+      - "85:8000"
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+
+volumes:
+  mysql_data:
