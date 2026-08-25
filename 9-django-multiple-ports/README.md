@@ -8,6 +8,7 @@ MVC (Django'da MTV) mimarisine uygun bir Django sitesi kurulması; uygulamanın 
 - Tek bir Django proje kod tabanı, `DJANGO_URLCONF` ortam değişkeniyle her servis için farklı `urls.py` seçiliyor (`config/urls_admin.py` / `config/urls_user.py`)
 - Admin panel için Django'nun hazır `django.contrib.admin` uygulaması kullanıldı — `is_staff=True` olmayan kullanıcılar otomatik olarak reddediliyor
 - `panel` app'i içinde `Duyuru` modeli; admin panelden eklenen veriler, kullanıcı panelinde (MTV: Model → View → Template) listeleniyor
+- Nginx reverse proxy eklendi: dışarıya açık 80/85 portlarını artık Nginx tutuyor, Django container'ları (`admin-panel`, `user-panel`) sadece iç ağda, Nginx üzerinden erişilebilir durumda. `nginx.conf`'ta iki ayrı `server` bloğu, her biri kendi portundan gelen isteği ilgili Django container'ına `proxy_pass` ile yönlendiriyor.
 
 ## Kullanılan Teknolojiler
 Python, Django 5.2, MySQL 8.0, Docker, Docker Compose
@@ -22,6 +23,7 @@ docker-compose up -d admin-panel user-panel
 \`\`\`
 - Admin panel: http://127.0.0.1/admin/
 - Kullanıcı panel: http://127.0.0.1:85/
+- docker-compose up -d nginx
 
 ## Karşılaşılan Sorunlar ve Çözümler
 - Okul/kurum ağında Docker Hub image indirirken (`mysql:8.0`) sürekli `tls: handshake failure` hatası alındı; mobil hotspot üzerinden indirilerek çözüldü.
