@@ -1,0 +1,27 @@
+FROM centos:8
+
+# CentOS8 repoları 2021'de EOL olduğu için, Project 1'de yaptığımız gibi
+# vault.centos.org'a yönlendiriyoruz
+
+RUN cd /etc/yum.repos.d/ && \
+    sed -i 's/mirrorlist/#mirrorlist/g' *.repo && \
+    sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' *.repo
+
+#RPM paketleme tools
+RUN dnf install -y rpm-build rpmdevtools dnf-plugins-core wget tar gcc make
+RUN dnf install -y epel-release
+RUN dnf install -y zeromq-devel git
+RUN wget -q https://go.dev/dl/go1.26.2.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go1.26.2.linux-amd64.tar.gz && \
+    rm go1.26.2.linux-amd64.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}"
+RUN dnf install -y unzip
+RUN wget -q https://github.com/protocolbuffers/protobuf/releases/download/v36.0/protoc-36.0-linux-x86_64.zip && \
+    unzip -q protoc-36.0-linux-x86_64.zip -d /usr/local && \
+    rm protoc-36.0-linux-x86_64.zip
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+ENV PATH="/root/go/bin:${PATH}"
+
+#sürekli açık kalan çalışma ortamı
+CMD [ "sleep","infinity" ]
+

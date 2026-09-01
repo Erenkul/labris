@@ -1,0 +1,9 @@
+1-Environment olarak centos 8 docker container rpmbuild,rpmdevtools paketleri
+2-klasör yapısı rpmbuild ile : specs,sources,build,RPMS,SRPMS
+3-ilk paket msmtp
+    c ile yazılmış olan bu mail gönderme aracı
+4-netflow2ng 
+5-Test:
+    .npm dosyalarını dnf install ./packet.rpm ile kurup gerçekten çalıştığını ve dependencies otomatik olarak geldiğini doğrulama
+6-github .spec dosyaları ile + readme.md ile push
+spec dosyaları rpm in kalbi dockerfile gibi nasıl inşaa edileceğine dair tarife benzer.

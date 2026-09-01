@@ -1,0 +1,30 @@
+Name:           msmtp
+Version:        1.8.33
+Release:        1%{?dist}
+Summary:        SMTP client with sendmail compatible interface
+Name → paketin adı. Bu, kurulum sırasında dnf install msmtp dediğinde kullanılacak isim.
+Version → programın sürüm numarası (gerçek msmtp projesinin şu anki sürümü, 1.8.33).
+Release → "bizim bu sürümü kaç kez paketlediğimiz" sayacı. Programın kendisi değişmese bile, biz .spec dosyasında bir hata düzeltip yeniden paketlersek, bu sayıyı 2, 3 diye artırırız. %{?dist} kısmı, RPM'in kendi otomatik eklediği bir etiket — CentOS8'de bunu .el8 yapıyor (yani "el8" = "Enterprise Linux 8" kısaltması), paketin hangi sistem için hazırlandığını belirtiyor.
+Summary → tek satırlık, kısa açıklama — dnf search gibi komutlarda görünen özet.
+
+
+
+spec
+License:        GPLv3+
+URL:            https://marlam.de/msmtp
+Source0:        https://marlam.de/msmtp/download/%{name}-%{version}.tar.xz
+License → programın lisansı (msmtp'nin gerçek lisansı GPLv3, + işareti "ya da sonraki sürümleri" demek — projenin kendi lisans dosyasından geliyor)
+URL → programın resmi web sitesi (bilgi amaçlı, kod bununla ilgili bir şey yapmıyor)
+Source0 → en önemli satırlardan biri: kaynak kodun nereden indirileceği. %{name} ve %{version} yerine otomatik olarak msmtp ve 1.8.33 yazılıyor (yukarıda tanımladığımız için) — yani bu satır aslında https://marlam.de/msmtp/download/msmtp-1.8.33.tar.xz demek, ama sabit yazmak yerine değişken kullanıyoruz. Neden değişken kullanıyoruz: ileride sürüm güncellersek (Version'ı değiştirirsek), bu satırı elle değiştirmemize gerek kalmaz, otomatik güncellenir.
+spec
+
+
+
+BuildRequires:  gcc, make, gnutls-devel
+BuildRequires → paketi derlemek için (kurmak için değil, inşa etmek için) container'a önceden kurulması gereken araçlar. gcc/make → C kodunu derleyecek araçlar (Dockerfile'daki build-essentialin CentOS karşılığı). gnutls-devel → msmtp'nin TLS/şifreleme özelliğini derleyebilmesi için gereken kütüphane.
+spec
+%description
+msmtp is an SMTP client...
+%description → uzun, birkaç cümlelik açıklama — dnf info msmtp dediğinde görünen ayrıntılı metin.
+
+Genel özet: Bu bölüm, Dockerfile'ın FROM/ilk satırlarına benziyor — henüz hiçbir işlem yapmıyoruz, sadece "bu paket kim, nereden geliyor, neye ihtiyacı var" diye kimlik bilgisi veriyoruz. Asıl "derleme/kurulum" işlemleri (%prep, %build, %install, %files) bir sonraki adımda gelecek.
