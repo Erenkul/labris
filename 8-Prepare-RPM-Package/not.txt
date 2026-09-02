@@ -7,3 +7,205 @@
     .npm dosyalarını dnf install ./packet.rpm ile kurup gerçekten çalıştığını ve dependencies otomatik olarak geldiğini doğrulama
 6-github .spec dosyaları ile + readme.md ile push
 spec dosyaları rpm in kalbi dockerfile gibi nasıl inşaa edileceğine dair tarife benzer.
+
+
+1) Genel resim — RPM paketleme nedir, ne yaptık
+
+RPM = CentOS/RHEL ailesinin kullandığı hazır kurulum paketi formatı (.rpm uzantılı). dnf install paket.rpm dediğinde, programı doğru yerlere kopyalayan, bağımlılıkları kontrol eden bir sistem.
+
+Görevimiz: iki hazır açık kaynak projeyi (msmtp, netflow2ng) kaynak kodundan alıp, kendi RPM paketimizi inşa etmekti. Bunun kalbi .spec dosyası — Dockerfile'ın "nasıl inşa ederim" mantığının RPM dünyasındaki karşılığı.
+
+2) Ortam — Dockerfile, satır satır
+dockerfile
+FROM centos:8
+
+CentOS8 tabanlı bir "kutu" inşa ediyoruz (Project 1'den tanıdık).
+
+dockerfile
+RUN cd /etc/yum.repos.d/ && sed -i 's/mirrorlist/#mirrorlist/g' *.repo && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' *.repo
+
+CentOS8'in depoları 2021'de kapandığı (EOL) için, vault.centos.org'a yönlendiriyoruz (Project 1'de de yaptığımız gibi).
+
+dockerfile
+RUN dnf install -y rpm-build rpmdevtools dnf-plugins-core wget tar gcc make
+rpm-build → asıl paketleme aracı (rpmbuild komutunu sağlıyor)
+rpmdevtools → klasör iskeletini otomatik kuran araçlar (rpmdev-setuptree)
+dnf-plugins-core → dnf builddep özelliğini sağlıyor (bağımlılıkları otomatik kurma)
+gcc, make → C kodu derlemek için
+dockerfile
+RUN dnf install -y epel-release
+
+EPEL = CentOS'un resmi depolarına ek, topluluk deposu. zeromq-devel gibi bazı paketler sadece burada var.
+
+dockerfile
+RUN dnf install -y zeromq-devel git
+
+zeromq-devel → netflow2ng'nin ihtiyaç duyduğu ZMQ mesajlaşma kütüphanesi. git → netflow2ng'nin Makefile'ı sürüm bilgisi için git komutları kullanıyor.
+
+dockerfile
+RUN wget -q https://go.dev/dl/go1.26.2.linux-amd64.tar.gz && tar -C /usr/local -xzf go1.26.2.linux-amd64.tar.gz && rm go1.26.2.linux-amd64.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+CentOS8'in kendi Go paketi (1.16) çok eskiydi — Go'yu resmi kaynağından, güncel sürümde (1.26.2) elle kurduk. ENV PATH ile go komutunu her yerden çağrılabilir yaptık.
+
+dockerfile
+RUN dnf install -y unzip
+RUN wget -q https://github.com/protocolbuffers/protobuf/releases/download/v36.0/protoc-36.0-linux-x86_64.zip && unzip -q protoc-36.0-linux-x86_64.zip -d /usr/local && rm protoc-36.0-linux-x86_64.zip
+
+protoc (Protocol Buffers derleyicisi) de dnf'te yoktu — GitHub'dan hazır binary indirdik.
+
+dockerfile
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+ENV PATH="/root/go/bin:${PATH}"
+
+protoc-gen-go → protoc'un Go kodu üretme eklentisi, Go'nun kendi kurulum sistemiyle (go install) kuruldu.
+
+dockerfile
+CMD [ "sleep","infinity" ]
+
+Container sürekli açık kalsın diye (Görev 4'teki network-lab gibi).
+
+3) msmtp.spec — satır satır
+spec
+Name:           msmtp
+Version:        1.8.33
+Release:        1%{?dist}
+Summary:        SMTP client with sendmail compatible interface
+
+Paketin kimliği: adı, sürümü, "bizim kaçıncı paketleme denemesi" olduğu (Release), kısa açıklaması. %{?dist} = CentOS8 için otomatik .el8 etiketi.
+
+spec
+License:        GPLv3+
+URL:            https://marlam.de/msmtp
+Source0:        https://marlam.de/msmtp/releases/%{name}-%{version}.tar.xz
+
+Lisans, proje sitesi, kaynak kodun gerçek indirme adresi (%{name}/%{version} otomatik msmtp/1.8.33 olur).
+
+spec
+BuildRequires:  gcc, make, gnutls-devel
+
+Derlemek için gereken araçlar — gnutls-devel TLS/şifreleme desteği için.
+
+spec
+%description
+...
+
+Uzun açıklama metni (dnf info çıktısında görünür).
+
+spec
+%prep
+%setup -q
+
+"Hazırlık" aşaması — Source0'daki arşivi indirip aç.
+
+spec
+%build
+CFLAGS="%{optflags} -include stdbool.h"
+%configure
+%make_build
+
+%{optflags} = RPM'in standart derleme bayrakları, -include stdbound.h = bizim eklediğimiz düzeltme (kaynak kod bool tipini import etmeden kullanıyordu). %configure = ./configure'ı çalıştır, %make_build = make'i çalıştır.
+
+spec
+%install
+%make_install
+%find_lang %{name}
+rm -f %{buildroot}%{_infodir}/dir
+
+Derlenen dosyaları pakete yerleştir (%make_install), 13 dildeki çeviri dosyalarını otomatik bul (%find_lang), ortak info indeksini temizle.
+
+spec
+%files -f %{name}.lang
+%license COPYING
+%doc AUTHORS NEWS README
+%{_bindir}/msmtp
+%{_bindir}/msmtpd
+%{_mandir}/man1/msmtp.1*
+%{_mandir}/man1/msmtpd.1*
+%{_infodir}/msmtp.info*
+
+Pakete tam olarak hangi dosyaların dahil olacağının listesi — -f %{name}.lang ile çeviri dosyalarını da otomatik ekliyoruz.
+
+4) netflow2ng.spec — satır satır (msmtp'den farklı kısımlar)
+spec
+%global debug_package %{nil}
+
+En üstte — Go binary'leri C'nin debug formatını kullanmadığı için, RPM'in otomatik debug paketlemesini kapatıyoruz.
+
+spec
+Name:           netflow2ng
+Version:        0.2.2
+Release:        1%{?dist}
+Summary:        NetFlow v9 collector for ntopng
+
+License:        MIT
+URL:            https://github.com/synfinatic/netflow2ng
+Source0:        https://github.com/synfinatic/netflow2ng/archive/refs/tags/v%{version}.tar.gz
+
+BuildRequires:  zeromq-devel, git
+
+Aynı mantık — sadece kaynak GitHub'ın otomatik arşiv linki, ve golang yok (çünkü Go'yu Dockerfile'da elle kurduk, dnf'e bırakmadık).
+
+spec
+%prep
+%setup -q
+
+Aynı — kaynağı aç.
+
+spec
+%build
+make
+
+msmtp'den fark burada — %configure/%make_build yok, çünkü bu proje autotools değil, doğrudan kendi Makefile'ını kullanıyor (make tek başına yeterli).
+
+spec
+%install
+mkdir -p %{buildroot}%{_bindir}
+install -p -m 755 dist/%{name}-%{version} %{buildroot}%{_bindir}/%{name}
+
+Yine fark — %make_install yok (bu Makefile'da "install" hedefi tanımlı değil), elle mkdir + install ile derlenen dosyayı (dist/netflow2ng-0.2.2) doğru yere, sade isimle (netflow2ng) kopyalıyoruz.
+
+spec
+%files
+%license LICENSE
+%doc README.md
+%{_bindir}/netflow2ng
+
+Basit bir liste — tek bir çalıştırılabilir dosya.
+
+5) Çalıştırdığımız komutlar — tam sıra
+docker build -t rpm-builder .                          → image inşa et
+docker run -dit --name rpm-builder rpm-builder          → container başlat
+docker exec -it rpm-builder bash                        → içine gir
+rpmdev-setuptree                                        → SPECS/SOURCES/BUILD/RPMS/SRPMS oluştur
+
+(Windows'ta, container dışında:)
+
+docker cp SPECS/msmtp.spec rpm-builder:/root/rpmbuild/SPECS/msmtp.spec
+docker cp SPECS/netflow2ng.spec rpm-builder:/root/rpmbuild/SPECS/netflow2ng.spec
+
+(container içinde, her iki paket için tekrar eden 4 adım:)
+
+sed -i 's/\r$//' ~/rpmbuild/SPECS/<paket>.spec   → CRLF temizle
+spectool -g -R ~/rpmbuild/SPECS/<paket>.spec     → kaynağı indir
+dnf builddep -y ~/rpmbuild/SPECS/<paket>.spec    → bağımlılıkları kur
+rpmbuild -ba ~/rpmbuild/SPECS/<paket>.spec       → derle + paketle
+dnf install -y .../<paket>.rpm                   → kur
+<paket> --version / --help                       → çalıştığını doğrula
+6) Genel özet, tek cümlede
+
+Her iki paket için de aynı 5 adımlı zincir işledi: kaynak kodu tanımla (Source0) → hazırla (%prep) → derle (%build) → paketin içine dosyaları yerleştir (%install) → pakete hangi dosyaların dahil olacağını listele (%files) — sonra rpmbuild bunu gerçek .rpm'e çevirdi, dnf install ile kurup çalıştırarak doğruladık. msmtp'de bu standart/klasik yoldu (autotools makroları), netflow2ng'de ise projenin kendi Makefile'ına elle uyum sağladık — ikisi de aynı 5 bölümlü iskeleti kullandı, sadece %build/%install içindeki komutlar projeye göre değişti.
+
+
+
+Anlamadığım kısımlar ve aldığım cevaplar:
+
+3) Go binary'si ve debug paketleme
+
+Go binary'si = Go diliyle yazılmış kodun, derlendikten sonra ortaya çıkan çalıştırılabilir dosyası (msmtp'nin C'den derlenmiş hali gibi, ama Go'nun kendi derleyicisiyle).
+
+Neden debug paketlemeyi kapattık: RPM, normalde her programın içine gömülü "hata ayıklama bilgisini" (kodun hangi satırının hangi makine koduna karşılık geldiği gibi) ayrı bir pakete çıkarır — ama bu, C programlarının kullandığı standart formata göre çalışıyor. Go'nun derleyicisi, kendi farklı bir debug formatı kullanıyor; RPM'in aracı bunu tanıyamadı, "hiçbir şey bulamadım" deyip boş bir paket üretmeye kalktı, RPM de boş pakete izin vermedi. %global debug_package %{nil} diyerek "bu paket için hiç debug paketleme yapma" dedik — sorunu kökten kaldırdık.
+
+4) "golang'ı dnf'e bırakmadık" ne demek
+
+CentOS8'in kendi dnf install golang komutu, çok eski bir Go sürümü (1.16) veriyordu. Biz bunun yerine Go'yu kendi elimizle, wget ile doğrudan Go'nun resmi sitesinden (go.dev), güncel sürümde (1.26.2) indirip kurduk. Yani "normalde dnf'in yapacağı işi, bu sefer dnf'e değil, kendi wget komutumuza yaptırdık" demek — .spec dosyasındaki BuildRequires listesinden golang'ı bu yüzden çıkardık, çünkü dnf'in ona hiç dokunmasına gerek yoktu.

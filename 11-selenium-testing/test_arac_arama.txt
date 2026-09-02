@@ -1,0 +1,35 @@
+Import'lar (1-9. satırlar)
+Selenium'un test için lazım olan parçalarını içeri alıyor: tarayıcıyı açacak webdriver, elementleri bulmak için By (id, css selector, xpath gibi arama yöntemleri), belirli bir şeyin olmasını beklemek için WebDriverWait/expected_conditions, ve hata türleri (element bulunamadı, tıklama engellendi, zaman aşımı gibi).
+
+driver fixture (11-26. satır)
+Bu, pytest'e özel bir "hazırlık fonksiyonu". params=["firefox","chrome","edge"] sayesinde pytest bu testi 3 kez çalıştırır — her seferinde farklı bir tarayıcı açarak.
+
+request.param o an hangi tarayıcının sırası geldiğini söyler ("firefox", "chrome" veya "edge").
+İlgili tarayıcıyı açar (webdriver.Firefox() vs.).
+yield drv → tarayıcıyı asıl test fonksiyonuna (test_aracAramaTesti4) teslim eder, test çalışır.
+Test bitince (başarılı ya da başarısız fark etmez) drv.quit() çalışır, yani tarayıcı kapanır. Bu "cleanup" (temizlik) adımıdır.
+Yardımcı fonksiyonlar (30-66. satırlar)
+Testin kendisinde tekrar tekrar kullanılan işlemleri fonksiyona ayırmışlar:
+
+click_when_ready: Bir elementin tıklanabilir hale gelmesini bekler (wait.until(...)), sonra tıklar. Eğer tam o sırada başka bir şey elementin üstüne binip tıklamayı engellerse (ElementClickInterceptedException), biraz bekleyip tekrar dener. Yani "sağlam tıklama" fonksiyonu.
+
+click_nth_visible_day: Takvimde görünen (disabled olmayan) günleri bulur, n indeksindeki güne tıklar. n=-3 gibi negatif sayılar Python'da "sondan sayarak" anlamına gelir (son 3. gün gibi).
+
+close_datepicker_overlay: Takvim açıldıktan sonra ekranı kaplayan yarı saydam bir katman (overlay) varsa onu kapatmaya çalışır. Önce normal tıklama dener, olmazsa JavaScript ile zorla tıklar (execute_script), o da olmazsa overlay'i JavaScript ile görünmez yapar. Element hiç yoksa (NoSuchElementException) sorun etmeden geçer.
+
+Asıl test: test_aracAramaTesti4 (68-132. satır)
+Adım adım bir kullanıcı gibi davranıyor:
+
+72-74: PHPTravels sitesini açar, pencere boyutunu ayarlar.
+77-80: Çıkabilecek "demo uyarısı" penceresini kapatmayı dener; çıkmazsa (TimeoutException) takılmadan devam eder.
+83: "Cars" (araç kiralama) sekmesine tıklar.
+86-91: Alış (pick-up) yeri kutusuna tıklar, "charles" yazar, öneri listesi gelene kadar 0.5 saniye bekler, listeden 3. öneriyi seçer.
+94-99: Aynısını bırakış (drop-off) yeri için yapar, "brus" yazıp öneri seçer.
+102-108: Tarih kutusuna tıklayıp takvimi açar, sondan 3. görünen güne tıklayarak gidiş tarihini, sondan 2. güne tıklayarak dönüş tarihini seçer.
+111-112: Takvim overlay'i varsa kapatır.
+116: "Ara" (search) butonuna tıklar.
+118-120: 3 saniye bekler, ekran görüntüsü alır (debug_firefox.png gibi) — hata ayıklama amaçlı, "arama sonrası ekran neye benziyor" diye kaydediyor.
+124: Çıkan sonuçlardan ilkine tıklar.
+126-127: Yine bekleyip ekran görüntüsü alır.
+130: "Book Now" butonunu bulup tıklar (metninde "Book Now" geçen buton ya da link).
+131-132: 3 saniye bekler, son bir ekran görüntüsü almaya çalışır.

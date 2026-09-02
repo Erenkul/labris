@@ -130,4 +130,5 @@ def test_aracAramaTesti4(driver):
     click_when_ready(driver, wait, By.XPATH, "//button[contains(., 'Book Now')] | //a[contains(., 'Book Now')]")
     time.sleep(3)
     driver.save_screenshot("f^debug_after_booknow_{driver.name}.png")
+
     
