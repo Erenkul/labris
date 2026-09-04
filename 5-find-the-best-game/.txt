@@ -1,0 +1,28 @@
+1) pcap dosyası — Wireshark/tcpdump'ın kullandığı, ham network paketlerinin kaydedildiği format. Python'da scapy kütüphanesiyle okunabiliyor.
+
+2) TLS handshake (el sıkışma) — İki taraf (istemci/sunucu) şifreli bağlantı kurarken önce "hangi şifreleme yöntemini kullanacağız" diye anlaşıyor (ClientHello/ServerHello paketleri). Bu anlaşma şifresiz gidiyor — yani pcap'te bu kısmı düz okuyabiliyoruz.
+
+3) İki farklı anahtar değişim yöntemi — görevin kalbi burada:
+
+Statik RSA (TLS 1.2'de yaygın): İstemci, gizli bir sayıyı doğrudan sunucunun RSA açık anahtarıyla şifreleyip gönderiyor. Bu durumda, elinde sunucunun özel anahtarı (server.key) varsa, o şifreli sayıyı çözüp tüm konuşmayı deşifre edebilirsin — best_game.pcap tam olarak bu.
+Ephemeral (EC)DHE (TLS 1.3'te zorunlu): Anahtar değişimi, her bağlantıda yeniden üretilen, geçici bir yöntemle yapılıyor (Diffie-Hellman). Sunucunun kalıcı özel anahtarı bu değişimde hiç kullanılmıyor — bu yüzden server.key elinde olsa bile bu trafiği çözemezsin. Buna Perfect Forward Secrecy (PFS) deniyor — "biri gelecekte sunucunun anahtarını ele geçirse bile, geçmiş konuşmaları çözemesin" diye tasarlanmış bir güvenlik özelliği. best_game_tls1_3.pcap'in gerçek amacı, bunu senin kendi gözlerinle kanıtlaman.
+
+best_game.pcap          -> TLS 1.2, RSA tabanlı, server.key ile çözülebilir
+best_game_tls1_3.pcap   -> TLS 1.3, ephemeral key exchange, server.key ile çözülemez
+
+
+4) Scapy — Python'da network paketlerini okuyup/yazıp/analiz etmeye yarayan kütüphane; TLS paketlerini de anlayabilen bir eklentisi var.
+
+Aşamalar
+Ortam hazırlığı — Python + scapy/cryptography kütüphaneleri (Docker'a gerek yok, bu tamamen saf Python)
+pcap'leri scapy ile açıp temel yapısına bakmak — kaç paket, hangi TLS sürümü, hangi cipher suite kullanılmış
+best_game.pcap'i server.key ile deşifre etmek — asıl "oyun" bilgisinin saklı olduğu yer muhtemelen burası
+best_game_tls1_3.pcap'in neden çözülemediğini kanıtlamak — aynı yöntemi burada denedip başarısız olduğunu göstermek, sebebini (PFS) raporlamak
+Deşifre edilen veriden "oyunu" çıkarmak — muhtemelen bir HTTP cevabı ya da dosya transferi içinde
+Rapor/script'i düzenleyip GitHub'a göndermek
+
+
+
+
+
+
