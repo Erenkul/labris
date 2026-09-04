@@ -1,7 +1,0 @@
-11-selenium-testing/venv/
-11-selenium-testing/__pycache__/
-11-selenium-testing/.pytest_cache/
-11-selenium-testing/debug_*.png
-11-selenium-testing/f^debug_*.png
-cookies.txt
-.vscode/
